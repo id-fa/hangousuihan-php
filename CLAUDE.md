@@ -4,9 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**hangousuihan** は、画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするPHP CLIユーティリティ。日本語ファイル名のエンコーディング処理に重点を置いている。
+**hangousuihan** は、画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするCLIユーティリティ。日本語ファイル名のエンコーディング処理に重点を置いている。
+
+実装は3バリアント存在する:
+
+| ファイル | 言語 | 対応形式 | 外部ツール |
+|---------|------|---------|-----------|
+| `hangousuihan.php` | PHP | ZIP/7Z/RAR/LZH | 7z.exe, magick.exe |
+| `hangousuihan_standalone_ziponly.php` | PHP | ZIPのみ | 不要（GD + ZipArchive） |
+| `test_python/hangousuihan.py` | Python | ZIP/7Z/RAR/LZH | 不要（RAR展開時のみunrar DLL） |
 
 ## 実行方法
+
+### PHP版（メイン）
 
 ```bash
 # 通常実行（画像リサイズあり、最大1920x1920px）
@@ -16,13 +26,31 @@ php hangousuihan.php
 php hangousuihan.php 1
 ```
 
+### PHP版（スタンドアロン・ZIP専用）
+
+```bash
+php hangousuihan_standalone_ziponly.php
+php hangousuihan_standalone_ziponly.php 1
+```
+
+### Python版
+
+```bash
+cd test_python
+pip install -r requirements.txt
+python hangousuihan.py
+python hangousuihan.py 1
+```
+
 処理対象ファイルは `./target/` に配置し、結果は `./result/` に出力される。一時ファイルは `./tmp/` に展開される。
 
 ## アーキテクチャ
 
-単一ファイル構成（`hangousuihan.php`）。旧`libphp7.inc.php`は廃止済み。
+処理フロー（全バリアント共通）: アーカイブ展開 → ネスト書庫展開 → 画像リサイズ＋ファイル名安全化 → ZIP再パック（mtime保持）
 
-処理フロー: アーカイブ展開 → ネスト書庫展開 → 画像リサイズ＋ファイル名安全化 → ZIP再パック（mtime保持）
+### PHP版（hangousuihan.php）
+
+単一ファイル構成。旧`libphp7.inc.php`は廃止済み。
 
 主要定数:
 - `RESIZE_MAX` — リサイズ上限（ImageMagickジオメトリ指定、デフォルト `1920x1920>`）
@@ -37,15 +65,32 @@ php hangousuihan.php 1
 - `echoLine()` — コンソール出力
 - `ensureTrailingSlash()` — ディレクトリ末尾スラッシュ保証
 
+### PHP版スタンドアロン（hangousuihan_standalone_ziponly.php）
+
+ZIP専用。7z.exeの代わりにZipArchive、magick.exeの代わりにGD拡張を使用。
+
+### Python版（test_python/hangousuihan.py）
+
+PHP版と同等のロジックをPythonで再実装。Pillow（画像処理）、py7zr（7Z）、rarfile（RAR）、lhafile（LZH）を使用。詳細は `test_python/README.md` を参照。
+
 ## 外部依存
 
+### PHP版（メイン）
 - **PHP 8.4+**（mbstring, SPL, intl/Normalizer拡張必須）
 - **7z.exe** — アーカイブ展開・作成（`./lib/`またはPATHから検索）
 - **magick.exe** (ImageMagick) — 画像リサイズ（`./lib/`またはPATHから検索）
 
+### PHP版スタンドアロン
+- **PHP 8.4+**（mbstring, intl, gd, zip拡張必須）
+
+### Python版
+- **Python 3.10+**
+- `pip install -r test_python/requirements.txt`（Pillow, py7zr, rarfile, lhafile）
+- RAR展開時のみ **unrar.dll** が別途必要（詳細は `test_python/README.md`）
+
 ## コード規約
 
-- PHP 8.4、`declare(strict_types=1)`
-- グローバル関数ベース（フレームワークなし）
-- エンコーディングはUTF-8統一（旧版のCP932分岐は廃止）
+- PHP: PHP 8.4、`declare(strict_types=1)`、グローバル関数ベース
+- Python: Python 3.10+、型ヒント使用、`pathlib.Path`ベース
+- エンコーディングはUTF-8統一
 - タイムゾーン: Asia/Tokyo
