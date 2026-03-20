@@ -9,6 +9,7 @@ Usage:
     python hangousuihan.py 1        # リサイズなし（リネーム・再パックのみ）
 """
 
+import argparse
 import os
 import re
 import shutil
@@ -33,11 +34,19 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="hangousuihan - 画像アーカイブ変換ツール")
+    parser.add_argument("noresize", nargs="?", default=None,
+                        help="1 を指定するとリサイズなし（リネーム・再パックのみ）")
+    parser.add_argument("-g", "--grayscale", action="store_true",
+                        help="出力画像をグレースケール化する")
+    args = parser.parse_args()
+
     TARGET_DIR.mkdir(exist_ok=True)
     TEMP_DIR.mkdir(exist_ok=True)
     RESULT_DIR.mkdir(exist_ok=True)
 
-    noresize = len(sys.argv) > 1 and sys.argv[1] == "1"
+    noresize = args.noresize == "1"
+    grayscale = args.grayscale
 
     archives = [
         f for f in sorted(TARGET_DIR.iterdir())
@@ -108,7 +117,7 @@ def main() -> None:
             if not noresize:
                 convert_to = safe_dir / (safe_base + "_new.jpg")
                 echo_line(f"> resize {p}")
-                ok = resize_image(p, convert_to)
+                ok = resize_image(p, convert_to, grayscale)
 
                 if ok and convert_to.exists() and convert_to.stat().st_size > 0:
                     os.utime(convert_to, (f2["mtime"], f2["mtime"]))
@@ -243,7 +252,7 @@ def create_zip(source_dir: Path, dest_zip: Path) -> None:
 # 画像処理
 # ============================================================
 
-def resize_image(src: Path, dest: Path) -> bool:
+def resize_image(src: Path, dest: Path, grayscale: bool = False) -> bool:
     """Pillowで画像リサイズしてJPEG保存"""
     try:
         with Image.open(src) as img:
@@ -255,6 +264,9 @@ def resize_image(src: Path, dest: Path) -> bool:
                 new_w = round(w * ratio)
                 new_h = round(h * ratio)
                 img = img.resize((new_w, new_h), Image.LANCZOS)
+
+            if grayscale:
+                img = img.convert("L").convert("RGB")
 
             img.save(dest, "JPEG", quality=JPEG_QUALITY)
         return True

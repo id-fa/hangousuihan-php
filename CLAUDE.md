@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 [hangousuihan](https://dyama.org/hangousuihan/)（UNIX版）の勝手移植版。画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするユーティリティ。日本語ファイル名のエンコーディング処理に重点を置いている。
 
 本家版との差異:
-- **未実装**: グレースケール化、回転、反転、レベル補正、各種フィルタ
+- **未実装**: 回転、反転、レベル補正、各種フィルタ
 - **独自機能**: ファイル名からSJIS（CP932）にないUnicode文字を除去、書庫内書庫（ネスト書庫）の再帰的展開
 
 実装は4バリアント存在する:
@@ -45,6 +45,8 @@ cd test_python
 pip install -r requirements.txt
 python hangousuihan.py
 python hangousuihan.py 1
+python hangousuihan.py --grayscale      # グレースケール化
+python hangousuihan.py 1 --grayscale    # リサイズなし＋グレースケール化
 ```
 
 ### Python GUI版
@@ -68,6 +70,7 @@ python hangousuihan-gui.py
 主要定数:
 - `RESIZE_MAX` — リサイズ上限（ImageMagickジオメトリ指定、デフォルト `1920x1920>`）
 - `JPEG_QUALITY` — JPEG出力品質（デフォルト `90`）
+- `GRAYSCALE` — グレースケール化（デフォルト `false`、`true` で `-colorspace Gray` を付加）
 
 主要関数:
 - `safeFilename()` — Unicodeエスケープ展開、サロゲートペア合成、絵文字除去、CP932互換チェック、メタ文字全角化
@@ -84,7 +87,7 @@ ZIP専用。7z.exeの代わりにZipArchive、magick.exeの代わりにGD拡張�
 
 ### Python CLI版（test_python/hangousuihan.py）
 
-PHP版と同等のロジックをPythonで再実装。Pillow（画像処理）、py7zr（7Z）、rarfile（RAR）、lhafile（LZH）を使用。詳細は `test_python/README.md` を参照。
+PHP版と同等のロジックをPythonで再実装。Pillow（画像処理）、py7zr（7Z）、rarfile（RAR）、lhafile（LZH）を使用。`-g` / `--grayscale` オプションでグレースケール化に対応。詳細は `test_python/README.md` を参照。
 
 ### Python GUI版（test_python/hangousuihan-gui.py）
 
@@ -94,6 +97,7 @@ CLI版と同等のコアロジックをtkinter GUIで提供。以下の設定を
 - **リサイズ最大幅・最大高** — デフォルト 1920x1920
 - **出力画像形式** — JPEG / PNG / WEBP から選択（デフォルト JPEG）
 - **品質** — デフォルト 90（JPEG/WEBPは品質値、PNGは compress_level に変換）
+- **グレースケール化** — チェックボックスで有効化
 - **リサイズなしモード** — チェックボックスでリネーム・再パックのみに切替
 - **処理中断** — 中断ボタンで処理を途中停止可能
 

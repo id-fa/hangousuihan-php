@@ -115,7 +115,8 @@ def create_zip(source_dir: Path, dest_zip: Path) -> None:
 def resize_image(src: Path, dest: Path, log,
                  max_w: int = RESIZE_MAX_W, max_h: int = RESIZE_MAX_H,
                  quality: int = JPEG_QUALITY,
-                 out_format: str = "JPEG") -> bool:
+                 out_format: str = "JPEG",
+                 grayscale: bool = False) -> bool:
     try:
         with Image.open(src) as img:
             if out_format == "PNG":
@@ -128,6 +129,11 @@ def resize_image(src: Path, dest: Path, log,
                 new_w = round(w * ratio)
                 new_h = round(h * ratio)
                 img = img.resize((new_w, new_h), Image.LANCZOS)
+            if grayscale:
+                if out_format == "PNG":
+                    img = img.convert("LA")
+                else:
+                    img = img.convert("L").convert("RGB")
             fmt_info = OUTPUT_FORMATS[out_format]
             img.save(dest, out_format, **fmt_info["save_kwargs"](quality))
         return True
@@ -224,6 +230,7 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
                      max_w: int = RESIZE_MAX_W, max_h: int = RESIZE_MAX_H,
                      quality: int = JPEG_QUALITY,
                      out_format: str = "JPEG",
+                     grayscale: bool = False,
                      cancel_event: threading.Event | None = None) -> None:
     """メイン処理（ワーカースレッドから呼ばれる）"""
     target_dir.mkdir(exist_ok=True)
@@ -300,7 +307,7 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
                 out_ext = OUTPUT_FORMATS[out_format]["ext"]
                 convert_to = safe_dir / (safe_base + "_new" + out_ext)
                 log(f"> resize {p}")
-                ok = resize_image(p, convert_to, log, max_w, max_h, quality, out_format)
+                ok = resize_image(p, convert_to, log, max_w, max_h, quality, out_format, grayscale)
                 if ok and convert_to.exists() and convert_to.stat().st_size > 0:
                     os.utime(convert_to, (f2["mtime"], f2["mtime"]))
                     log(f"> rm {p}")
@@ -394,6 +401,10 @@ class App(tk.Tk):
         ttk.Label(frame_resize, text="品質:").pack(side="left")
         self.var_quality = tk.IntVar(value=JPEG_QUALITY)
         ttk.Entry(frame_resize, textvariable=self.var_quality, width=4).pack(side="left", padx=(2, 0))
+
+        self.var_grayscale = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame_opts, text="グレースケール化",
+                        variable=self.var_grayscale).pack(anchor="w", padx=4, pady=2)
 
         self.var_noresize = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame_opts, text="リサイズなし（リネーム・再パックのみ）",
@@ -502,7 +513,10 @@ class App(tk.Tk):
         max_h = self.var_max_h.get()
         quality = self.var_quality.get()
         out_format = self.var_format.get()
+        grayscale = self.var_grayscale.get()
         self._log(f"リサイズ: {'なし' if self.var_noresize.get() else f'あり (最大 {max_w}x{max_h}, {out_format} 品質 {quality})'}")
+        if grayscale:
+            self._log("グレースケール: あり")
 
         self.after(100, self._poll_queue)
 
@@ -514,7 +528,7 @@ class App(tk.Tk):
                   self._on_progress,
                   self._on_done,
                   max_w, max_h, quality, out_format,
-                  self._cancel_event),
+                  grayscale, self._cancel_event),
             daemon=True,
         )
         t.start()

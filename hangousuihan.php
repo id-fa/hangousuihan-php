@@ -31,6 +31,7 @@ const RESULT_DIR    = './result/';
 const DS            = '/';
 const RESIZE_MAX    = '1920x1920>';  // リサイズ上限（ImageMagickジオメトリ指定）
 const JPEG_QUALITY  = 90;            // JPEG出力品質（1-100）
+const GRAYSCALE     = false;         // true: グレースケール化する
 
 // --- 外部ツール検索 ---
 $exe7z      = resolveExe(SEVEN_ZIP_EXE);
@@ -129,7 +130,9 @@ foreach ($archives as $f) {
 
         if (!$noresize) {
             $convertTo = $safeDirname . DS . $safeBasename . '_new.jpg';
-            $cmd = $exeConvert . ' "' . $f2['fullpath'] . '" -quality ' . JPEG_QUALITY . ' -resize "' . RESIZE_MAX . '" "' . $convertTo . '"';
+            $cmd = $exeConvert . ' "' . $f2['fullpath'] . '"'
+                . (GRAYSCALE ? ' -colorspace Gray' : '')
+                . ' -quality ' . JPEG_QUALITY . ' -resize "' . RESIZE_MAX . '" "' . $convertTo . '"';
             echoLine('> ' . $cmd);
             shell_exec($cmd);
 
