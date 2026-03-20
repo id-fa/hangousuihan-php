@@ -6,13 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **hangousuihan** は、画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするCLIユーティリティ。日本語ファイル名のエンコーディング処理に重点を置いている。
 
-実装は3バリアント存在する:
+実装は4バリアント存在する:
 
 | ファイル | 言語 | 対応形式 | 外部ツール |
 |---------|------|---------|-----------|
 | `hangousuihan.php` | PHP | ZIP/7Z/RAR/LZH | 7z.exe, magick.exe |
 | `hangousuihan_standalone_ziponly.php` | PHP | ZIPのみ | 不要（GD + ZipArchive） |
-| `test_python/hangousuihan.py` | Python | ZIP/7Z/RAR/LZH | 不要（RAR展開時のみunrar DLL） |
+| `test_python/hangousuihan.py` | Python (CLI) | ZIP/7Z/RAR/LZH | 不要（RAR展開時のみunrar DLL） |
+| `test_python/hangousuihan-gui.py` | Python (GUI) | ZIP/7Z/RAR/LZH | 不要（RAR展開時のみunrar DLL） |
 
 ## 実行方法
 
@@ -33,13 +34,21 @@ php hangousuihan_standalone_ziponly.php
 php hangousuihan_standalone_ziponly.php 1
 ```
 
-### Python版
+### Python CLI版
 
 ```bash
 cd test_python
 pip install -r requirements.txt
 python hangousuihan.py
 python hangousuihan.py 1
+```
+
+### Python GUI版
+
+```bash
+cd test_python
+pip install -r requirements.txt
+python hangousuihan-gui.py
 ```
 
 処理対象ファイルは `./target/` に配置し、結果は `./result/` に出力される。一時ファイルは `./tmp/` に展開される。
@@ -69,9 +78,26 @@ python hangousuihan.py 1
 
 ZIP専用。7z.exeの代わりにZipArchive、magick.exeの代わりにGD拡張を使用。
 
-### Python版（test_python/hangousuihan.py）
+### Python CLI版（test_python/hangousuihan.py）
 
 PHP版と同等のロジックをPythonで再実装。Pillow（画像処理）、py7zr（7Z）、rarfile（RAR）、lhafile（LZH）を使用。詳細は `test_python/README.md` を参照。
+
+### Python GUI版（test_python/hangousuihan-gui.py）
+
+CLI版と同等のコアロジックをtkinter GUIで提供。以下の設定をGUI上で変更可能:
+
+- **対象/出力ディレクトリ** — ファイルダイアログで選択
+- **リサイズ最大幅・最大高** — デフォルト 1920x1920
+- **出力画像形式** — JPEG / PNG / WEBP から選択（デフォルト JPEG）
+- **品質** — デフォルト 90（JPEG/WEBPは品質値、PNGは compress_level に変換）
+- **リサイズなしモード** — チェックボックスでリネーム・再パックのみに切替
+
+処理はワーカースレッドで実行され、ログとプログレスバーでリアルタイム表示。
+
+主要構成:
+- `OUTPUT_FORMATS` — 出力形式ごとの拡張子・save引数を定義する辞書
+- `App` クラス — tkinter.Tk を継承した GUI アプリケーション
+- コアロジック関数（`extract_archive`, `resize_image`, `process_archives` 等）はCLI版と共通
 
 ## 外部依存
 

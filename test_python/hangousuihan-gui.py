@@ -29,6 +29,13 @@ JPEG_QUALITY = 90
 ARCHIVE_EXTS = {".zip", ".7z", ".rar", ".lzh"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
+# 出力形式設定: Pillow format名, 拡張子, save時キーワード引数
+OUTPUT_FORMATS = {
+    "JPEG": {"ext": ".jpg", "save_kwargs": lambda q: {"quality": q}},
+    "PNG":  {"ext": ".png", "save_kwargs": lambda q: {"compress_level": min(q // 10, 9)}},
+    "WEBP": {"ext": ".webp", "save_kwargs": lambda q: {"quality": q}},
+}
+
 
 # ============================================================
 # コアロジック（CLIと共通）
@@ -105,17 +112,24 @@ def create_zip(source_dir: Path, dest_zip: Path) -> None:
                 zf.writestr(info, fh.read())
 
 
-def resize_image(src: Path, dest: Path, log) -> bool:
+def resize_image(src: Path, dest: Path, log,
+                 max_w: int = RESIZE_MAX_W, max_h: int = RESIZE_MAX_H,
+                 quality: int = JPEG_QUALITY,
+                 out_format: str = "JPEG") -> bool:
     try:
         with Image.open(src) as img:
-            img = img.convert("RGB")
+            if out_format == "PNG":
+                img = img.convert("RGBA")
+            else:
+                img = img.convert("RGB")
             w, h = img.size
-            if w > RESIZE_MAX_W or h > RESIZE_MAX_H:
-                ratio = min(RESIZE_MAX_W / w, RESIZE_MAX_H / h)
+            if w > max_w or h > max_h:
+                ratio = min(max_w / w, max_h / h)
                 new_w = round(w * ratio)
                 new_h = round(h * ratio)
                 img = img.resize((new_w, new_h), Image.LANCZOS)
-            img.save(dest, "JPEG", quality=JPEG_QUALITY)
+            fmt_info = OUTPUT_FORMATS[out_format]
+            img.save(dest, out_format, **fmt_info["save_kwargs"](quality))
         return True
     except Exception as e:
         log(f"! resize failed: {src}: {e}")
@@ -206,7 +220,10 @@ def rm_rf(path: Path, leave_folder: bool = False) -> None:
 
 
 def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
-                     noresize: bool, log, on_progress, on_done) -> None:
+                     noresize: bool, log, on_progress, on_done,
+                     max_w: int = RESIZE_MAX_W, max_h: int = RESIZE_MAX_H,
+                     quality: int = JPEG_QUALITY,
+                     out_format: str = "JPEG") -> None:
     """メイン処理（ワーカースレッドから呼ばれる）"""
     target_dir.mkdir(exist_ok=True)
     temp_dir.mkdir(exist_ok=True)
@@ -275,9 +292,10 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
                     safe_dir.mkdir(parents=True, exist_ok=True)
                     unlink_dirs.add(str(p.parent))
             if not noresize:
-                convert_to = safe_dir / (safe_base + "_new.jpg")
+                out_ext = OUTPUT_FORMATS[out_format]["ext"]
+                convert_to = safe_dir / (safe_base + "_new" + out_ext)
                 log(f"> resize {p}")
-                ok = resize_image(p, convert_to, log)
+                ok = resize_image(p, convert_to, log, max_w, max_h, quality, out_format)
                 if ok and convert_to.exists() and convert_to.stat().st_size > 0:
                     os.utime(convert_to, (f2["mtime"], f2["mtime"]))
                     log(f"> rm {p}")
@@ -348,6 +366,28 @@ class App(tk.Tk):
         # --- オプション ---
         frame_opts = ttk.LabelFrame(self, text="オプション")
         frame_opts.pack(fill="x", **pad)
+
+        # リサイズ設定
+        frame_resize = ttk.Frame(frame_opts)
+        frame_resize.pack(fill="x", padx=4, pady=2)
+
+        ttk.Label(frame_resize, text="最大幅:").pack(side="left")
+        self.var_max_w = tk.IntVar(value=RESIZE_MAX_W)
+        ttk.Entry(frame_resize, textvariable=self.var_max_w, width=6).pack(side="left", padx=(2, 8))
+
+        ttk.Label(frame_resize, text="最大高:").pack(side="left")
+        self.var_max_h = tk.IntVar(value=RESIZE_MAX_H)
+        ttk.Entry(frame_resize, textvariable=self.var_max_h, width=6).pack(side="left", padx=(2, 8))
+
+        ttk.Label(frame_resize, text="出力形式:").pack(side="left")
+        self.var_format = tk.StringVar(value="JPEG")
+        ttk.Combobox(frame_resize, textvariable=self.var_format,
+                     values=list(OUTPUT_FORMATS.keys()), state="readonly",
+                     width=6).pack(side="left", padx=(2, 8))
+
+        ttk.Label(frame_resize, text="品質:").pack(side="left")
+        self.var_quality = tk.IntVar(value=JPEG_QUALITY)
+        ttk.Entry(frame_resize, textvariable=self.var_quality, width=4).pack(side="left", padx=(2, 0))
 
         self.var_noresize = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame_opts, text="リサイズなし（リネーム・再パックのみ）",
@@ -438,7 +478,11 @@ class App(tk.Tk):
         self._log(f"=== 処理開始 ===")
         self._log(f"対象: {target}")
         self._log(f"出力: {result}")
-        self._log(f"リサイズ: {'なし' if self.var_noresize.get() else 'あり (最大 {0}x{1})'.format(RESIZE_MAX_W, RESIZE_MAX_H)}")
+        max_w = self.var_max_w.get()
+        max_h = self.var_max_h.get()
+        quality = self.var_quality.get()
+        out_format = self.var_format.get()
+        self._log(f"リサイズ: {'なし' if self.var_noresize.get() else f'あり (最大 {max_w}x{max_h}, {out_format} 品質 {quality})'}")
 
         self.after(100, self._poll_queue)
 
@@ -448,7 +492,8 @@ class App(tk.Tk):
                   self.var_noresize.get(),
                   self._log,
                   self._on_progress,
-                  self._on_done),
+                  self._on_done,
+                  max_w, max_h, quality, out_format),
             daemon=True,
         )
         t.start()
