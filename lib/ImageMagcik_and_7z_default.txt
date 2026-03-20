@@ -1,0 +1,4 @@
+# require
+magick.exe
+7z.exe
+7z.dll
