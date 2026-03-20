@@ -1,6 +1,6 @@
 # hangousuihan-php
 
-[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（PHP CLI）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・ファイル名安全化・ZIP再パッケージ機能を移植しています。
+[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（PHP CLI）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・ZIP再パッケージ機能を移植しています。
 
 本家版にあるグレースケール化・回転・反転・レベル補正・各種フィルタ機能は実装されていません。一方、本家版にない独自機能として以下があります:
 
