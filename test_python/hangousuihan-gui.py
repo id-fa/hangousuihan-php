@@ -266,7 +266,9 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
             if f2["size"] <= 0 or f2["path"].suffix.lower() not in IMAGE_EXTS:
                 continue
             p = f2["path"]
-            safe_dir = Path(safe_filename(str(p.parent), include_sep=False))
+            rel_parent = p.parent.relative_to(temp_dir)
+            safe_rel = Path(safe_filename(str(rel_parent), include_sep=False)) if str(rel_parent) != "." else Path(".")
+            safe_dir = temp_dir / safe_rel
             safe_base = safe_filename(p.stem)
             if str(p.parent) != str(safe_dir):
                 if not safe_dir.exists():
