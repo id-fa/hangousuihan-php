@@ -33,9 +33,7 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
 
 def main() -> None:
-    if not TARGET_DIR.is_dir():
-        sys.exit(f"target dir {TARGET_DIR} not found")
-
+    TARGET_DIR.mkdir(exist_ok=True)
     TEMP_DIR.mkdir(exist_ok=True)
     RESULT_DIR.mkdir(exist_ok=True)
 
@@ -45,6 +43,9 @@ def main() -> None:
         f for f in sorted(TARGET_DIR.iterdir())
         if f.is_file() and f.suffix.lower() in ARCHIVE_EXTS
     ]
+
+    if not archives:
+        sys.exit(f"error: no archive files found in {TARGET_DIR} (supported: {', '.join(ARCHIVE_EXTS)})")
 
     success = 0
 
@@ -140,7 +141,7 @@ def main() -> None:
     echo_line(f"> rm -rf {TEMP_DIR}")
     rm_rf(TEMP_DIR, leave_folder=True)
 
-    print(f"{success} file(s) processed.")
+    print(f"{success} file(s) processed.", flush=True)
 
 
 # ============================================================
@@ -393,7 +394,7 @@ def rm_rf(path: Path, leave_folder: bool = False) -> None:
 
 
 def echo_line(s: str) -> None:
-    print(s)
+    print(s, flush=True)
 
 
 if __name__ == "__main__":
