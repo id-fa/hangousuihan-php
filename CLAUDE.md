@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**hangousuihan** は、画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするCLIユーティリティ。日本語ファイル名のエンコーディング処理に重点を置いている。
+[hangousuihan](https://dyama.org/hangousuihan/)（UNIX版）の勝手移植版。画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするユーティリティ。日本語ファイル名のエンコーディング処理に重点を置いている。
+
+本家版との差異:
+- **未実装**: グレースケール化、回転、反転、レベル補正、各種フィルタ
+- **独自機能**: ファイル名からSJIS（CP932）にないUnicode文字を除去、書庫内書庫（ネスト書庫）の再帰的展開
 
 実装は4バリアント存在する:
 
@@ -91,8 +95,9 @@ CLI版と同等のコアロジックをtkinter GUIで提供。以下の設定を
 - **出力画像形式** — JPEG / PNG / WEBP から選択（デフォルト JPEG）
 - **品質** — デフォルト 90（JPEG/WEBPは品質値、PNGは compress_level に変換）
 - **リサイズなしモード** — チェックボックスでリネーム・再パックのみに切替
+- **処理中断** — 中断ボタンで処理を途中停止可能
 
-処理はワーカースレッドで実行され、ログとプログレスバーでリアルタイム表示。
+処理はワーカースレッドで実行され、ログとプログレスバーでリアルタイム表示。中断は `threading.Event` で制御。
 
 主要構成:
 - `OUTPUT_FORMATS` — 出力形式ごとの拡張子・save引数を定義する辞書

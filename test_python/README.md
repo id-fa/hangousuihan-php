@@ -1,8 +1,11 @@
 # hangousuihan (Python版)
 
-[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（Python実装）です。
+[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（Python実装）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・ファイル名安全化・ZIP再パッケージ機能を移植しています。CLI版とGUI版を同梱しています。
 
-画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージするツール。CLI版とGUI版を同梱しています。
+本家版にあるグレースケール化・回転・反転・レベル補正・各種フィルタ機能は実装されていません。一方、本家版にない独自機能として以下があります:
+
+- ファイル名からSJIS（CP932）にないUnicode文字を除去
+- 書庫内書庫（ネスト書庫）をすべて再帰的に展開
 
 ## 必要環境
 

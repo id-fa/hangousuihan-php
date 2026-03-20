@@ -1,8 +1,11 @@
 # hangousuihan-php
 
-[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（PHP CLI）です。
+[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（PHP CLI）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・ファイル名安全化・ZIP再パッケージ機能を移植しています。
 
-画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開し、画像のリサイズ・ファイル名の安全化を行い、ZIPで再パッケージするユーティリティです。
+本家版にあるグレースケール化・回転・反転・レベル補正・各種フィルタ機能は実装されていません。一方、本家版にない独自機能として以下があります:
+
+- ファイル名からSJIS（CP932）にないUnicode文字を除去
+- 書庫内書庫（ネスト書庫）をすべて再帰的に展開
 
 ## 動作環境
 
@@ -55,9 +58,12 @@ php hangousuihan.php 1
 
 # hangousuihan-php (English)
 
-An unofficial PHP CLI port of [hangousuihan](https://dyama.org/hangousuihan/).
+An unofficial PHP CLI port of [hangousuihan](https://dyama.org/hangousuihan/), based on the UNIX version. It ports the archive extraction, image resizing, filename sanitization, and ZIP repackaging functionality.
 
-A utility that extracts image archives (ZIP, 7Z, RAR, LZH), resizes images, sanitizes filenames, and repackages them into ZIP files.
+Grayscale conversion, rotation, flipping, level adjustment, and various filter features from the original are not implemented. On the other hand, this port includes the following features not found in the original:
+
+- Strips Unicode characters not present in SJIS (CP932) from filenames
+- Recursively extracts nested archives (archives within archives)
 
 ## Requirements
 
