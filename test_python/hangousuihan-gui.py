@@ -223,7 +223,8 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
                      noresize: bool, log, on_progress, on_done,
                      max_w: int = RESIZE_MAX_W, max_h: int = RESIZE_MAX_H,
                      quality: int = JPEG_QUALITY,
-                     out_format: str = "JPEG") -> None:
+                     out_format: str = "JPEG",
+                     cancel_event: threading.Event | None = None) -> None:
     """メイン処理（ワーカースレッドから呼ばれる）"""
     target_dir.mkdir(exist_ok=True)
     temp_dir.mkdir(exist_ok=True)
@@ -243,6 +244,10 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
     success = 0
 
     for idx, f in enumerate(archives):
+        if cancel_event and cancel_event.is_set():
+            log("--- 中断されました ---")
+            break
+
         if "_new." in f.name:
             continue
 
@@ -339,6 +344,7 @@ class App(tk.Tk):
 
         self._msg_queue: queue.Queue[str] = queue.Queue()
         self._running = False
+        self._cancel_event = threading.Event()
 
         self._build_ui()
 
@@ -400,6 +406,9 @@ class App(tk.Tk):
         self.btn_run = ttk.Button(frame_run, text="実行", command=self._on_run)
         self.btn_run.pack(side="left")
 
+        self.btn_cancel = ttk.Button(frame_run, text="中断", command=self._on_cancel, state="disabled")
+        self.btn_cancel.pack(side="left", padx=(4, 0))
+
         self.lbl_status = ttk.Label(frame_run, text="待機中")
         self.lbl_status.pack(side="left", padx=12)
 
@@ -453,11 +462,20 @@ class App(tk.Tk):
         def _finish():
             self._poll_queue()
             self.btn_run.configure(state="normal")
-            self.lbl_status.configure(text=f"完了: {success}/{total} ファイル処理済み")
-            self._log(f"\n--- 完了: {success} file(s) processed ---")
+            self.btn_cancel.configure(state="disabled")
+            cancelled = self._cancel_event.is_set()
+            status = f"中断: {success}/{total} ファイル処理済み" if cancelled else f"完了: {success}/{total} ファイル処理済み"
+            self.lbl_status.configure(text=status)
+            self._log(f"\n--- {'中断' if cancelled else '完了'}: {success} file(s) processed ---")
             self._poll_queue()
 
         self.after(200, _finish)
+
+    def _on_cancel(self):
+        if self._running:
+            self._cancel_event.set()
+            self.btn_cancel.configure(state="disabled")
+            self.lbl_status.configure(text="中断中...")
 
     def _on_run(self):
         if self._running:
@@ -472,7 +490,9 @@ class App(tk.Tk):
             return
 
         self._running = True
+        self._cancel_event.clear()
         self.btn_run.configure(state="disabled")
+        self.btn_cancel.configure(state="normal")
         self.lbl_status.configure(text="処理中...")
         self.progress["value"] = 0
         self._log(f"=== 処理開始 ===")
@@ -493,7 +513,8 @@ class App(tk.Tk):
                   self._log,
                   self._on_progress,
                   self._on_done,
-                  max_w, max_h, quality, out_format),
+                  max_w, max_h, quality, out_format,
+                  self._cancel_event),
             daemon=True,
         )
         t.start()
