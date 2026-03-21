@@ -26,12 +26,15 @@ date_default_timezone_set('Asia/Tokyo');
 const SEVEN_ZIP_EXE = '7z.exe';
 const CONVERT_EXE   = 'magick.exe';
 const TEMP_DIR      = './tmp/';
+const CONV_DIR      = './tmp_conv/';
 const TARGET_DIR    = './target/';
 const RESULT_DIR    = './result/';
+const COPY_NON_IMAGE = true;         // 非画像ファイルも出力ZIPに含める
 const DS            = '/';
 const RESIZE_MAX    = '1920x1920>';  // リサイズ上限（ImageMagickジオメトリ指定）
 const JPEG_QUALITY  = 90;            // JPEG出力品質（1-100）
 const GRAYSCALE     = false;         // true: グレースケール化する
+const OUTPUT_SUFFIX = '_new';       // 出力ファイル名に付加するサフィックス（空文字で付与なし）
 
 // --- 外部ツール検索 ---
 $exe7z      = resolveExe(SEVEN_ZIP_EXE);
@@ -43,6 +46,9 @@ if (!is_dir(TARGET_DIR)) {
 }
 if (!is_dir(TEMP_DIR)) {
     mkdir(TEMP_DIR, 0777);
+}
+if (!is_dir(CONV_DIR)) {
+    mkdir(CONV_DIR, 0777);
 }
 if (!is_dir(RESULT_DIR)) {
     mkdir(RESULT_DIR, 0777);
@@ -59,21 +65,21 @@ foreach ($archives as $f) {
     $basename = basename($f);
 
     // 処理済skip
-    if (str_contains($basename, '_new.')) {
+    if (OUTPUT_SUFFIX !== '' && str_contains($basename, OUTPUT_SUFFIX . '.')) {
         continue;
     }
 
     $pathinfo = pathinfo($f);
     $statinfo = stat($f);
 
-    $renameto = $noresize
-        ? $pathinfo['filename'] . '.zip'
-        : $pathinfo['filename'] . '_new.zip';
+    $renameto = $pathinfo['filename'] . OUTPUT_SUFFIX . '.zip';
     $renameto = safeFilename($renameto);
 
     // 一時ディレクトリクリア
     echoLine('> rm -rf ' . TEMP_DIR);
     rmRf(TEMP_DIR, leaveFolder: true);
+    echoLine('> rm -rf ' . CONV_DIR);
+    rmRf(CONV_DIR, leaveFolder: true);
 
     // アーカイブ展開
     $cmd = $exe7z . ' x -o"' . TEMP_DIR . '" "' . addslashes($f) . '"';
@@ -107,59 +113,64 @@ foreach ($archives as $f) {
         }
     }
 
-    // リサイズとリネーム
+    // リサイズとリネーム → CONV_DIR に出力
     $files = recursiveFiles(TEMP_DIR);
-    $unlinkDirs = [];
 
     foreach ($files as $f2) {
-        if ($f2['size'] <= 0 || !preg_match('/\.(jpg|jpeg|png)$/i', $f2['name'])) {
-            continue;
-        }
-
         $path2 = pathinfo($f2['fullpath']);
-        $safeDirname = safeFilename($path2['dirname'], includeDs: false);
-        $safeBasename = safeFilename($path2['filename']);
+        // TEMP_DIR からの相対パスを算出
+        $relDir = ltrim(substr($path2['dirname'], strlen(rtrim(TEMP_DIR, '/'))), '/\\');
+        $safeRelDir = $relDir !== '' ? safeFilename($relDir, includeDs: false) : '';
+        $convDir = $safeRelDir !== '' ? CONV_DIR . $safeRelDir : rtrim(CONV_DIR, '/');
 
-        // ディレクトリ名が安全でない場合、安全なディレクトリを作成
-        if ($path2['dirname'] !== $safeDirname) {
-            if (!file_exists($safeDirname)) {
-                mkdir($safeDirname, 0777, true);
-                $unlinkDirs[$path2['dirname']] = true;
+        $isImage = $f2['size'] > 0 && preg_match('/\.(jpg|jpeg|png)$/i', $f2['name']);
+
+        if ($isImage) {
+            $safeBasename = safeFilename($path2['filename']);
+
+            if (!is_dir($convDir)) {
+                mkdir($convDir, 0777, true);
             }
-        }
 
-        if (!$noresize) {
-            $convertTo = $safeDirname . DS . $safeBasename . '_new.jpg';
-            $cmd = $exeConvert . ' "' . $f2['fullpath'] . '"'
-                . (GRAYSCALE ? ' -colorspace Gray' : '')
-                . ' -quality ' . JPEG_QUALITY . ' -resize "' . RESIZE_MAX . '" "' . $convertTo . '"';
-            echoLine('> ' . $cmd);
-            shell_exec($cmd);
+            if (!$noresize) {
+                $convertTo = $convDir . DS . $safeBasename . OUTPUT_SUFFIX . '.jpg';
+                $cmd = $exeConvert . ' "' . $f2['fullpath'] . '"'
+                    . (GRAYSCALE ? ' -colorspace Gray' : '')
+                    . ' -quality ' . JPEG_QUALITY . ' -resize "' . RESIZE_MAX . '" "' . $convertTo . '"';
+                echoLine('> ' . $cmd);
+                shell_exec($cmd);
 
-            if (file_exists($convertTo) && filesize($convertTo) > 0) {
-                touch($convertTo, $f2['mtime']);
-                echoLine('> rm ' . $f2['fullpath']);
-                unlink($f2['fullpath']);
+                if (file_exists($convertTo) && filesize($convertTo) > 0) {
+                    touch($convertTo, $f2['mtime']);
+                } else {
+                    // 変換失敗時はコピーのみ
+                    $copyTo = $convDir . DS . $safeBasename . '.' . $path2['extension'];
+                    copy($f2['fullpath'], $copyTo);
+                    touch($copyTo, $f2['mtime']);
+                }
             } else {
-                // 変換失敗時はリネームのみ
-                renameIfNeeded($path2, $safeDirname, $safeBasename);
+                $copyTo = $convDir . DS . $safeBasename . '.' . $path2['extension'];
+                copy($f2['fullpath'], $copyTo);
+                touch($copyTo, $f2['mtime']);
             }
-        } else {
-            renameIfNeeded($path2, $safeDirname, $safeBasename);
+        } elseif (COPY_NON_IMAGE && $f2['size'] > 0) {
+            // 非画像ファイルをコピー
+            $safeBasename = safeFilename($path2['filename']);
+            if (!is_dir($convDir)) {
+                mkdir($convDir, 0777, true);
+            }
+            $copyTo = $convDir . DS . $safeBasename . '.' . $path2['extension'];
+            copy($f2['fullpath'], $copyTo);
+            touch($copyTo, $f2['mtime']);
         }
     }
 
-    // 空になった元ディレクトリを削除
-    foreach (array_keys($unlinkDirs) as $ud) {
-        @rmdir($ud);
-    }
-
-    // ZIP再パック
+    // ZIP再パック（CONV_DIRから）
     $resultPath = RESULT_DIR . $renameto;
     if (file_exists($resultPath)) {
         unlink($resultPath);
     }
-    $cmd = $exe7z . ' a "' . $resultPath . '" "' . ensureTrailingSlash(TEMP_DIR) . '*" -mx0';
+    $cmd = $exe7z . ' a "' . $resultPath . '" "' . ensureTrailingSlash(CONV_DIR) . '*" -mx0';
     echoLine('> ' . $cmd);
     shell_exec($cmd);
     touch($resultPath, $statinfo['mtime']);
@@ -170,25 +181,14 @@ foreach ($archives as $f) {
 // 後片付け
 echoLine('> rm -rf ' . TEMP_DIR);
 rmRf(TEMP_DIR, leaveFolder: true);
+echoLine('> rm -rf ' . CONV_DIR);
+rmRf(CONV_DIR, leaveFolder: true);
 
 echo $success . ' file(s) processed.' . PHP_EOL;
 
 // ============================================================
 // 関数定義
 // ============================================================
-
-/**
- * リネームが必要な場合のみリネーム
- */
-function renameIfNeeded(array $path2, string $safeDirname, string $safeBasename): void
-{
-    $from = $path2['dirname'] . DS . $path2['filename'] . '.' . $path2['extension'];
-    $to   = $safeDirname . DS . $safeBasename . '.' . $path2['extension'];
-    if ($to !== $from) {
-        echoLine('> mv ' . $from . ' ' . $to);
-        rename($from, $to);
-    }
-}
 
 /**
  * ファイル名の安全化

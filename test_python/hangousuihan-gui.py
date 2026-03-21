@@ -179,13 +179,6 @@ def safe_filename(s: str, include_sep: bool = True) -> str:
     return s
 
 
-def rename_if_needed(path: Path, safe_dir: Path, safe_base: str, log) -> None:
-    dest = safe_dir / (safe_base + path.suffix)
-    if dest != path:
-        log(f"> mv {path} {dest}")
-        path.rename(dest)
-
-
 def recursive_files(path: Path) -> list[dict]:
     results = []
     for p in sorted(path.rglob("*")):
@@ -231,11 +224,15 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
                      quality: int = JPEG_QUALITY,
                      out_format: str = "JPEG",
                      grayscale: bool = False,
-                     cancel_event: threading.Event | None = None) -> None:
+                     suffix: str = "_new",
+                     cancel_event: threading.Event | None = None,
+                     copy_non_image: bool = True) -> None:
     """メイン処理（ワーカースレッドから呼ばれる）"""
     target_dir.mkdir(exist_ok=True)
     temp_dir.mkdir(exist_ok=True)
     result_dir.mkdir(exist_ok=True)
+    conv_dir = temp_dir.parent / "tmp_conv"
+    conv_dir.mkdir(exist_ok=True)
 
     archives = [
         f for f in sorted(target_dir.iterdir())
@@ -255,18 +252,17 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
             log("--- 中断されました ---")
             break
 
-        if "_new." in f.name:
+        if suffix and (suffix + ".") in f.name:
             continue
 
         stat_mtime = f.stat().st_mtime
-        renameto = (
-            f.stem + ".zip" if noresize
-            else f.stem + "_new.zip"
-        )
+        renameto = f.stem + suffix + ".zip"
         renameto = safe_filename(renameto)
 
         log(f"> rm -rf {temp_dir}")
         rm_rf(temp_dir, leave_folder=True)
+        log(f"> rm -rf {conv_dir}")
+        rm_rf(conv_dir, leave_folder=True)
 
         log(f"> extract {f}")
         if not extract_archive(f, temp_dir, log):
@@ -289,52 +285,50 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
                 f2["path"].unlink()
                 log(f"> rm {f2['path']}")
 
-        # リサイズとリネーム
-        unlink_dirs: set[str] = set()
+        # リサイズとリネーム → conv_dir に出力
         for f2 in recursive_files(temp_dir):
-            if f2["size"] <= 0 or f2["path"].suffix.lower() not in IMAGE_EXTS:
-                continue
             p = f2["path"]
             rel_parent = p.parent.relative_to(temp_dir)
             safe_rel = Path(safe_filename(str(rel_parent), include_sep=False)) if str(rel_parent) != "." else Path(".")
-            safe_dir = temp_dir / safe_rel
-            safe_base = safe_filename(p.stem)
-            if str(p.parent) != str(safe_dir):
-                if not safe_dir.exists():
-                    safe_dir.mkdir(parents=True, exist_ok=True)
-                    unlink_dirs.add(str(p.parent))
-            if not noresize:
-                out_ext = OUTPUT_FORMATS[out_format]["ext"]
-                convert_to = safe_dir / (safe_base + "_new" + out_ext)
-                log(f"> resize {p}")
-                ok = resize_image(p, convert_to, log, max_w, max_h, quality, out_format, grayscale)
-                if ok and convert_to.exists() and convert_to.stat().st_size > 0:
-                    os.utime(convert_to, (f2["mtime"], f2["mtime"]))
-                    log(f"> rm {p}")
-                    p.unlink()
+            out_dir = conv_dir / safe_rel
+            is_image = f2["size"] > 0 and p.suffix.lower() in IMAGE_EXTS
+
+            if is_image:
+                safe_base = safe_filename(p.stem)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                if not noresize:
+                    out_ext = OUTPUT_FORMATS[out_format]["ext"]
+                    convert_to = out_dir / (safe_base + suffix + out_ext)
+                    log(f"> resize {p}")
+                    ok = resize_image(p, convert_to, log, max_w, max_h, quality, out_format, grayscale)
+                    if ok and convert_to.exists() and convert_to.stat().st_size > 0:
+                        os.utime(convert_to, (f2["mtime"], f2["mtime"]))
+                    else:
+                        copy_to = out_dir / (safe_base + p.suffix)
+                        shutil.copy2(p, copy_to)
                 else:
-                    rename_if_needed(p, safe_dir, safe_base, log)
-            else:
-                rename_if_needed(p, safe_dir, safe_base, log)
+                    copy_to = out_dir / (safe_base + p.suffix)
+                    shutil.copy2(p, copy_to)
+            elif copy_non_image and f2["size"] > 0:
+                safe_base = safe_filename(p.stem)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                copy_to = out_dir / (safe_base + p.suffix)
+                shutil.copy2(p, copy_to)
 
-        for ud in unlink_dirs:
-            try:
-                os.rmdir(ud)
-            except OSError:
-                pass
-
-        # ZIP再パック
+        # ZIP再パック（conv_dirから）
         result_path = result_dir / renameto
         if result_path.exists():
             result_path.unlink()
         log(f"> pack {result_path}")
-        create_zip(temp_dir, result_path)
+        create_zip(conv_dir, result_path)
         os.utime(result_path, (stat_mtime, stat_mtime))
         success += 1
         on_progress(idx + 1, total)
 
     log(f"> rm -rf {temp_dir}")
     rm_rf(temp_dir, leave_folder=True)
+    log(f"> rm -rf {conv_dir}")
+    rm_rf(conv_dir, leave_folder=True)
     on_done(success, total)
 
 
@@ -400,7 +394,11 @@ class App(tk.Tk):
 
         ttk.Label(frame_resize, text="品質:").pack(side="left")
         self.var_quality = tk.IntVar(value=JPEG_QUALITY)
-        ttk.Entry(frame_resize, textvariable=self.var_quality, width=4).pack(side="left", padx=(2, 0))
+        ttk.Entry(frame_resize, textvariable=self.var_quality, width=4).pack(side="left", padx=(2, 8))
+
+        ttk.Label(frame_resize, text="サフィックス:").pack(side="left")
+        self.var_suffix = tk.StringVar(value="_new")
+        ttk.Entry(frame_resize, textvariable=self.var_suffix, width=8).pack(side="left", padx=(2, 0))
 
         self.var_grayscale = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame_opts, text="グレースケール化",
@@ -409,6 +407,10 @@ class App(tk.Tk):
         self.var_noresize = tk.BooleanVar(value=False)
         ttk.Checkbutton(frame_opts, text="リサイズなし（リネーム・再パックのみ）",
                         variable=self.var_noresize).pack(anchor="w", padx=4, pady=2)
+
+        self.var_copy_non_image = tk.BooleanVar(value=True)
+        ttk.Checkbutton(frame_opts, text="画像以外のファイルも含める",
+                        variable=self.var_copy_non_image).pack(anchor="w", padx=4, pady=2)
 
         # --- 実行ボタン・プログレスバー ---
         frame_run = ttk.Frame(self)
@@ -514,11 +516,15 @@ class App(tk.Tk):
         quality = self.var_quality.get()
         out_format = self.var_format.get()
         grayscale = self.var_grayscale.get()
+        suffix = self.var_suffix.get()
         self._log(f"リサイズ: {'なし' if self.var_noresize.get() else f'あり (最大 {max_w}x{max_h}, {out_format} 品質 {quality})'}")
         if grayscale:
             self._log("グレースケール: あり")
+        self._log(f"サフィックス: '{suffix}'" if suffix else "サフィックス: なし")
 
         self.after(100, self._poll_queue)
+
+        copy_non_image = self.var_copy_non_image.get()
 
         t = threading.Thread(
             target=process_archives,
@@ -528,7 +534,8 @@ class App(tk.Tk):
                   self._on_progress,
                   self._on_done,
                   max_w, max_h, quality, out_format,
-                  grayscale, self._cancel_event),
+                  grayscale, suffix, self._cancel_event,
+                  copy_non_image),
             daemon=True,
         )
         t.start()

@@ -61,7 +61,7 @@ python hangousuihan-gui.py
 
 ## アーキテクチャ
 
-処理フロー（全バリアント共通）: アーカイブ展開 → ネスト書庫展開 → 画像リサイズ＋ファイル名安全化 → ZIP再パック（mtime保持）
+処理フロー（全バリアント共通）: アーカイブ展開（`tmp/`） → ネスト書庫展開 → 画像リサイズ＋ファイル名安全化（`tmp_conv/`に出力） → ZIP再パック（`tmp_conv/`から、mtime保持）
 
 ### PHP版（hangousuihan.php）
 
@@ -71,10 +71,11 @@ python hangousuihan-gui.py
 - `RESIZE_MAX` — リサイズ上限（ImageMagickジオメトリ指定、デフォルト `1920x1920>`）
 - `JPEG_QUALITY` — JPEG出力品質（デフォルト `90`）
 - `GRAYSCALE` — グレースケール化（デフォルト `false`、`true` で `-colorspace Gray` を付加）
+- `CONV_DIR` — 変換出力用一時ディレクトリ（デフォルト `./tmp_conv/`）
+- `COPY_NON_IMAGE` — 非画像ファイルも出力ZIPに含める（デフォルト `true`）
 
 主要関数:
 - `safeFilename()` — Unicodeエスケープ展開、サロゲートペア合成、絵文字除去、CP932互換チェック、メタ文字全角化
-- `renameIfNeeded()` — 安全化後のファイル名が異なる場合のみリネーム
 - `recursiveFiles()` — ディレクトリ内ファイル再帰取得
 - `rmRf()` — 安全チェック付き再帰削除
 - `resolveExe()` — 外部ツールパス解決（`./lib/`およびPATHから検索）

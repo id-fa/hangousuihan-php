@@ -23,6 +23,7 @@ from PIL import Image
 
 # --- 設定 ---
 TEMP_DIR = Path("./tmp")
+CONV_DIR = Path("./tmp_conv")
 TARGET_DIR = Path("./target")
 RESULT_DIR = Path("./result")
 RESIZE_MAX_W = 1920
@@ -39,14 +40,21 @@ def main() -> None:
                         help="1 を指定するとリサイズなし（リネーム・再パックのみ）")
     parser.add_argument("-g", "--grayscale", action="store_true",
                         help="出力画像をグレースケール化する")
+    parser.add_argument("-s", "--suffix", default="_new",
+                        help="出力ファイル名に付加するサフィックス（デフォルト: _new、空文字で付与なし）")
+    parser.add_argument("--no-copy-extra", action="store_true",
+                        help="非画像ファイルを出力ZIPに含めない")
     args = parser.parse_args()
 
     TARGET_DIR.mkdir(exist_ok=True)
     TEMP_DIR.mkdir(exist_ok=True)
+    CONV_DIR.mkdir(exist_ok=True)
     RESULT_DIR.mkdir(exist_ok=True)
 
     noresize = args.noresize == "1"
     grayscale = args.grayscale
+    suffix = args.suffix
+    copy_non_image = not args.no_copy_extra
 
     archives = [
         f for f in sorted(TARGET_DIR.iterdir())
@@ -59,20 +67,19 @@ def main() -> None:
     success = 0
 
     for f in archives:
-        if "_new." in f.name:
+        if suffix and (suffix + ".") in f.name:
             continue
 
         stat_mtime = f.stat().st_mtime
 
-        renameto = (
-            f.stem + ".zip" if noresize
-            else f.stem + "_new.zip"
-        )
+        renameto = f.stem + suffix + ".zip"
         renameto = safe_filename(renameto)
 
         # 一時ディレクトリクリア
         echo_line(f"> rm -rf {TEMP_DIR}")
         rm_rf(TEMP_DIR, leave_folder=True)
+        echo_line(f"> rm -rf {CONV_DIR}")
+        rm_rf(CONV_DIR, leave_folder=True)
 
         # アーカイブ展開
         echo_line(f"> extract {f}")
@@ -98,50 +105,45 @@ def main() -> None:
                 f2["path"].unlink()
                 echo_line(f"> rm {f2['path']}")
 
-        # リサイズとリネーム
-        unlink_dirs: set[str] = set()
-
+        # リサイズとリネーム → CONV_DIR に出力
         for f2 in recursive_files(TEMP_DIR):
-            if f2["size"] <= 0 or f2["path"].suffix.lower() not in IMAGE_EXTS:
-                continue
-
             p = f2["path"]
-            safe_dir = Path(safe_filename(str(p.parent), include_sep=False))
-            safe_base = safe_filename(p.stem)
+            rel_parent = p.parent.relative_to(TEMP_DIR)
+            safe_rel = Path(safe_filename(str(rel_parent), include_sep=False)) if str(rel_parent) != "." else Path(".")
+            conv_dir = CONV_DIR / safe_rel
+            is_image = f2["size"] > 0 and p.suffix.lower() in IMAGE_EXTS
 
-            if str(p.parent) != str(safe_dir):
-                if not safe_dir.exists():
-                    safe_dir.mkdir(parents=True, exist_ok=True)
-                    unlink_dirs.add(str(p.parent))
+            if is_image:
+                safe_base = safe_filename(p.stem)
+                conv_dir.mkdir(parents=True, exist_ok=True)
 
-            if not noresize:
-                convert_to = safe_dir / (safe_base + "_new.jpg")
-                echo_line(f"> resize {p}")
-                ok = resize_image(p, convert_to, grayscale)
+                if not noresize:
+                    convert_to = conv_dir / (safe_base + suffix + ".jpg")
+                    echo_line(f"> resize {p}")
+                    ok = resize_image(p, convert_to, grayscale)
 
-                if ok and convert_to.exists() and convert_to.stat().st_size > 0:
-                    os.utime(convert_to, (f2["mtime"], f2["mtime"]))
-                    echo_line(f"> rm {p}")
-                    p.unlink()
+                    if ok and convert_to.exists() and convert_to.stat().st_size > 0:
+                        os.utime(convert_to, (f2["mtime"], f2["mtime"]))
+                    else:
+                        # 変換失敗時はコピーのみ
+                        copy_to = conv_dir / (safe_base + p.suffix)
+                        shutil.copy2(p, copy_to)
                 else:
-                    rename_if_needed(p, safe_dir, safe_base)
-            else:
-                rename_if_needed(p, safe_dir, safe_base)
+                    copy_to = conv_dir / (safe_base + p.suffix)
+                    shutil.copy2(p, copy_to)
+            elif copy_non_image and f2["size"] > 0:
+                safe_base = safe_filename(p.stem)
+                conv_dir.mkdir(parents=True, exist_ok=True)
+                copy_to = conv_dir / (safe_base + p.suffix)
+                shutil.copy2(p, copy_to)
 
-        # 空になった元ディレクトリを削除
-        for ud in unlink_dirs:
-            try:
-                os.rmdir(ud)
-            except OSError:
-                pass
-
-        # ZIP再パック（無圧縮）
+        # ZIP再パック（無圧縮、CONV_DIRから）
         result_path = RESULT_DIR / renameto
         if result_path.exists():
             result_path.unlink()
 
         echo_line(f"> pack {result_path}")
-        create_zip(TEMP_DIR, result_path)
+        create_zip(CONV_DIR, result_path)
         os.utime(result_path, (stat_mtime, stat_mtime))
 
         success += 1
@@ -149,6 +151,8 @@ def main() -> None:
     # 後片付け
     echo_line(f"> rm -rf {TEMP_DIR}")
     rm_rf(TEMP_DIR, leave_folder=True)
+    echo_line(f"> rm -rf {CONV_DIR}")
+    rm_rf(CONV_DIR, leave_folder=True)
 
     print(f"{success} file(s) processed.", flush=True)
 
@@ -349,14 +353,6 @@ def safe_filename(s: str, include_sep: bool = True) -> str:
 # ============================================================
 # ユーティリティ
 # ============================================================
-
-def rename_if_needed(path: Path, safe_dir: Path, safe_base: str) -> None:
-    """リネームが必要な場合のみリネーム"""
-    dest = safe_dir / (safe_base + path.suffix)
-    if dest != path:
-        echo_line(f"> mv {path} {dest}")
-        path.rename(dest)
-
 
 def recursive_files(path: Path) -> list[dict]:
     """ディレクトリ内のファイルを再帰的に取得"""
