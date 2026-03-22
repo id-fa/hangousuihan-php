@@ -4,6 +4,7 @@ hangousuihan GUI版 - tkinter
 画像アーカイブ（ZIP, 7Z, RAR, LZH）を展開・画像リサイズ・再パッケージ
 """
 
+import locale
 import os
 import queue
 import re
@@ -17,6 +18,103 @@ import zipfile
 from pathlib import Path
 
 from PIL import Image
+
+# --- i18n ---
+def _detect_ja() -> bool:
+    for env_var in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+        val = os.environ.get(env_var, "")
+        if val:
+            return val.lower().startswith("ja")
+    try:
+        loc = locale.getdefaultlocale()[0] or ""
+        return loc.lower().startswith("ja")
+    except Exception:
+        pass
+    return False
+
+_IS_JA = _detect_ja()
+
+_STRINGS_JA = {
+    "window_title": "hangousuihan GUI（id-fa 私家版）",
+    "directories": "ディレクトリ設定",
+    "target_label": "対象 (target):",
+    "result_label": "出力 (result):",
+    "browse": "参照...",
+    "options": "オプション",
+    "max_width": "最大幅:",
+    "max_height": "最大高:",
+    "output_format": "出力形式:",
+    "quality": "品質:",
+    "suffix": "サフィックス:",
+    "grayscale": "グレースケール化",
+    "no_resize": "リサイズなし（リネーム・再パックのみ）",
+    "copy_non_image": "画像以外のファイルも含める",
+    "run": "実行",
+    "cancel": "中断",
+    "status_idle": "待機中",
+    "status_running": "処理中...",
+    "status_cancelling": "中断中...",
+    "status_cancelled": "中断: {success}/{total} ファイル処理済み",
+    "status_done": "完了: {success}/{total} ファイル処理済み",
+    "log": "ログ",
+    "clear_log": "ログクリア",
+    "error": "エラー",
+    "error_target_not_found": "対象ディレクトリが存在しません:\n{path}",
+    "error_no_archives": "エラー: {path} にアーカイブが見つかりません",
+    "log_start": "=== 処理開始 ===",
+    "log_target": "対象: {path}",
+    "log_result": "出力: {path}",
+    "log_resize_on": "リサイズ: あり (最大 {w}x{h}, {fmt} 品質 {q})",
+    "log_resize_off": "リサイズ: なし",
+    "log_grayscale": "グレースケール: あり",
+    "log_suffix": "サフィックス: '{suffix}'",
+    "log_suffix_none": "サフィックス: なし",
+    "log_interrupted": "--- 中断されました ---",
+    "log_done_cancelled": "\n--- 中断: {n} file(s) processed ---",
+    "log_done": "\n--- 完了: {n} file(s) processed ---",
+}
+
+_STRINGS_EN = {
+    "window_title": "hangousuihan GUI (id-fa fork)",
+    "directories": "Directories",
+    "target_label": "Source (target):",
+    "result_label": "Output (result):",
+    "browse": "Browse...",
+    "options": "Options",
+    "max_width": "Max width:",
+    "max_height": "Max height:",
+    "output_format": "Format:",
+    "quality": "Quality:",
+    "suffix": "Suffix:",
+    "grayscale": "Grayscale",
+    "no_resize": "No resize (rename & repack only)",
+    "copy_non_image": "Include non-image files",
+    "run": "Run",
+    "cancel": "Cancel",
+    "status_idle": "Idle",
+    "status_running": "Processing...",
+    "status_cancelling": "Cancelling...",
+    "status_cancelled": "Cancelled: {success}/{total} file(s) processed",
+    "status_done": "Done: {success}/{total} file(s) processed",
+    "log": "Log",
+    "clear_log": "Clear log",
+    "error": "Error",
+    "error_target_not_found": "Target directory does not exist:\n{path}",
+    "error_no_archives": "Error: no archives found in {path}",
+    "log_start": "=== Processing started ===",
+    "log_target": "Source: {path}",
+    "log_result": "Output: {path}",
+    "log_resize_on": "Resize: on (max {w}x{h}, {fmt} quality {q})",
+    "log_resize_off": "Resize: off",
+    "log_grayscale": "Grayscale: on",
+    "log_suffix": "Suffix: '{suffix}'",
+    "log_suffix_none": "Suffix: none",
+    "log_interrupted": "--- Interrupted ---",
+    "log_done_cancelled": "\n--- Cancelled: {n} file(s) processed ---",
+    "log_done": "\n--- Done: {n} file(s) processed ---",
+}
+
+S = _STRINGS_JA if _IS_JA else _STRINGS_EN
 
 # --- デフォルト設定 ---
 DEFAULT_TARGET_DIR = Path("./target")
@@ -240,7 +338,7 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
     ]
 
     if not archives:
-        log(f"エラー: {target_dir} にアーカイブが見つかりません")
+        log(S["error_no_archives"].format(path=target_dir))
         on_done(0, 0)
         return
 
@@ -249,7 +347,7 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
 
     for idx, f in enumerate(archives):
         if cancel_event and cancel_event.is_set():
-            log("--- 中断されました ---")
+            log(S["log_interrupted"])
             break
 
         if suffix and (suffix + ".") in f.name:
@@ -339,7 +437,7 @@ def process_archives(target_dir: Path, result_dir: Path, temp_dir: Path,
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("hangousuihan GUI（id-fa 私家版）")
+        self.title(S["window_title"])
         self.geometry("720x560")
         self.minsize(600, 400)
 
@@ -353,90 +451,90 @@ class App(tk.Tk):
         pad = {"padx": 8, "pady": 4}
 
         # --- ディレクトリ設定 ---
-        frame_dirs = ttk.LabelFrame(self, text="ディレクトリ設定")
+        frame_dirs = ttk.LabelFrame(self, text=S["directories"])
         frame_dirs.pack(fill="x", **pad)
 
         # target
-        ttk.Label(frame_dirs, text="対象 (target):").grid(row=0, column=0, sticky="w", padx=4, pady=2)
+        ttk.Label(frame_dirs, text=S["target_label"]).grid(row=0, column=0, sticky="w", padx=4, pady=2)
         self.var_target = tk.StringVar(value=str(DEFAULT_TARGET_DIR.resolve()))
         ttk.Entry(frame_dirs, textvariable=self.var_target, width=60).grid(row=0, column=1, sticky="ew", padx=4, pady=2)
-        ttk.Button(frame_dirs, text="参照...", command=lambda: self._browse(self.var_target)).grid(row=0, column=2, padx=4, pady=2)
+        ttk.Button(frame_dirs, text=S["browse"], command=lambda: self._browse(self.var_target)).grid(row=0, column=2, padx=4, pady=2)
 
         # result
-        ttk.Label(frame_dirs, text="出力 (result):").grid(row=1, column=0, sticky="w", padx=4, pady=2)
+        ttk.Label(frame_dirs, text=S["result_label"]).grid(row=1, column=0, sticky="w", padx=4, pady=2)
         self.var_result = tk.StringVar(value=str(DEFAULT_RESULT_DIR.resolve()))
         ttk.Entry(frame_dirs, textvariable=self.var_result, width=60).grid(row=1, column=1, sticky="ew", padx=4, pady=2)
-        ttk.Button(frame_dirs, text="参照...", command=lambda: self._browse(self.var_result)).grid(row=1, column=2, padx=4, pady=2)
+        ttk.Button(frame_dirs, text=S["browse"], command=lambda: self._browse(self.var_result)).grid(row=1, column=2, padx=4, pady=2)
 
         frame_dirs.columnconfigure(1, weight=1)
 
         # --- オプション ---
-        frame_opts = ttk.LabelFrame(self, text="オプション")
+        frame_opts = ttk.LabelFrame(self, text=S["options"])
         frame_opts.pack(fill="x", **pad)
 
         # リサイズ設定
         frame_resize = ttk.Frame(frame_opts)
         frame_resize.pack(fill="x", padx=4, pady=2)
 
-        ttk.Label(frame_resize, text="最大幅:").pack(side="left")
+        ttk.Label(frame_resize, text=S["max_width"]).pack(side="left")
         self.var_max_w = tk.IntVar(value=RESIZE_MAX_W)
         ttk.Entry(frame_resize, textvariable=self.var_max_w, width=6).pack(side="left", padx=(2, 8))
 
-        ttk.Label(frame_resize, text="最大高:").pack(side="left")
+        ttk.Label(frame_resize, text=S["max_height"]).pack(side="left")
         self.var_max_h = tk.IntVar(value=RESIZE_MAX_H)
         ttk.Entry(frame_resize, textvariable=self.var_max_h, width=6).pack(side="left", padx=(2, 8))
 
-        ttk.Label(frame_resize, text="出力形式:").pack(side="left")
+        ttk.Label(frame_resize, text=S["output_format"]).pack(side="left")
         self.var_format = tk.StringVar(value="JPEG")
         ttk.Combobox(frame_resize, textvariable=self.var_format,
                      values=list(OUTPUT_FORMATS.keys()), state="readonly",
                      width=6).pack(side="left", padx=(2, 8))
 
-        ttk.Label(frame_resize, text="品質:").pack(side="left")
+        ttk.Label(frame_resize, text=S["quality"]).pack(side="left")
         self.var_quality = tk.IntVar(value=JPEG_QUALITY)
         ttk.Entry(frame_resize, textvariable=self.var_quality, width=4).pack(side="left", padx=(2, 8))
 
-        ttk.Label(frame_resize, text="サフィックス:").pack(side="left")
+        ttk.Label(frame_resize, text=S["suffix"]).pack(side="left")
         self.var_suffix = tk.StringVar(value="_new")
         ttk.Entry(frame_resize, textvariable=self.var_suffix, width=8).pack(side="left", padx=(2, 0))
 
         self.var_grayscale = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame_opts, text="グレースケール化",
+        ttk.Checkbutton(frame_opts, text=S["grayscale"],
                         variable=self.var_grayscale).pack(anchor="w", padx=4, pady=2)
 
         self.var_noresize = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame_opts, text="リサイズなし（リネーム・再パックのみ）",
+        ttk.Checkbutton(frame_opts, text=S["no_resize"],
                         variable=self.var_noresize).pack(anchor="w", padx=4, pady=2)
 
         self.var_copy_non_image = tk.BooleanVar(value=True)
-        ttk.Checkbutton(frame_opts, text="画像以外のファイルも含める",
+        ttk.Checkbutton(frame_opts, text=S["copy_non_image"],
                         variable=self.var_copy_non_image).pack(anchor="w", padx=4, pady=2)
 
         # --- 実行ボタン・プログレスバー ---
         frame_run = ttk.Frame(self)
         frame_run.pack(fill="x", **pad)
 
-        self.btn_run = ttk.Button(frame_run, text="実行", command=self._on_run)
+        self.btn_run = ttk.Button(frame_run, text=S["run"], command=self._on_run)
         self.btn_run.pack(side="left")
 
-        self.btn_cancel = ttk.Button(frame_run, text="中断", command=self._on_cancel, state="disabled")
+        self.btn_cancel = ttk.Button(frame_run, text=S["cancel"], command=self._on_cancel, state="disabled")
         self.btn_cancel.pack(side="left", padx=(4, 0))
 
-        self.lbl_status = ttk.Label(frame_run, text="待機中")
+        self.lbl_status = ttk.Label(frame_run, text=S["status_idle"])
         self.lbl_status.pack(side="left", padx=12)
 
         self.progress = ttk.Progressbar(frame_run, mode="determinate", length=200)
         self.progress.pack(side="right", fill="x", expand=True, padx=4)
 
         # --- ログ ---
-        frame_log = ttk.LabelFrame(self, text="ログ")
+        frame_log = ttk.LabelFrame(self, text=S["log"])
         frame_log.pack(fill="both", expand=True, **pad)
 
         self.txt_log = scrolledtext.ScrolledText(frame_log, height=16, state="disabled",
                                                   font=("Consolas", 9))
         self.txt_log.pack(fill="both", expand=True, padx=4, pady=4)
 
-        btn_clear = ttk.Button(frame_log, text="ログクリア", command=self._clear_log)
+        btn_clear = ttk.Button(frame_log, text=S["clear_log"], command=self._clear_log)
         btn_clear.pack(anchor="e", padx=4, pady=2)
 
     def _browse(self, var: tk.StringVar):
@@ -477,9 +575,15 @@ class App(tk.Tk):
             self.btn_run.configure(state="normal")
             self.btn_cancel.configure(state="disabled")
             cancelled = self._cancel_event.is_set()
-            status = f"中断: {success}/{total} ファイル処理済み" if cancelled else f"完了: {success}/{total} ファイル処理済み"
+            if cancelled:
+                status = S["status_cancelled"].format(success=success, total=total)
+            else:
+                status = S["status_done"].format(success=success, total=total)
             self.lbl_status.configure(text=status)
-            self._log(f"\n--- {'中断' if cancelled else '完了'}: {success} file(s) processed ---")
+            if cancelled:
+                self._log(S["log_done_cancelled"].format(n=success))
+            else:
+                self._log(S["log_done"].format(n=success))
             self._poll_queue()
 
         self.after(200, _finish)
@@ -488,7 +592,7 @@ class App(tk.Tk):
         if self._running:
             self._cancel_event.set()
             self.btn_cancel.configure(state="disabled")
-            self.lbl_status.configure(text="中断中...")
+            self.lbl_status.configure(text=S["status_cancelling"])
 
     def _on_run(self):
         if self._running:
@@ -499,28 +603,31 @@ class App(tk.Tk):
         temp = target.parent / "tmp"
 
         if not target.exists():
-            messagebox.showerror("エラー", f"対象ディレクトリが存在しません:\n{target}")
+            messagebox.showerror(S["error"], S["error_target_not_found"].format(path=target))
             return
 
         self._running = True
         self._cancel_event.clear()
         self.btn_run.configure(state="disabled")
         self.btn_cancel.configure(state="normal")
-        self.lbl_status.configure(text="処理中...")
+        self.lbl_status.configure(text=S["status_running"])
         self.progress["value"] = 0
-        self._log(f"=== 処理開始 ===")
-        self._log(f"対象: {target}")
-        self._log(f"出力: {result}")
+        self._log(S["log_start"])
+        self._log(S["log_target"].format(path=target))
+        self._log(S["log_result"].format(path=result))
         max_w = self.var_max_w.get()
         max_h = self.var_max_h.get()
         quality = self.var_quality.get()
         out_format = self.var_format.get()
         grayscale = self.var_grayscale.get()
         suffix = self.var_suffix.get()
-        self._log(f"リサイズ: {'なし' if self.var_noresize.get() else f'あり (最大 {max_w}x{max_h}, {out_format} 品質 {quality})'}")
+        if self.var_noresize.get():
+            self._log(S["log_resize_off"])
+        else:
+            self._log(S["log_resize_on"].format(w=max_w, h=max_h, fmt=out_format, q=quality))
         if grayscale:
-            self._log("グレースケール: あり")
-        self._log(f"サフィックス: '{suffix}'" if suffix else "サフィックス: なし")
+            self._log(S["log_grayscale"])
+        self._log(S["log_suffix"].format(suffix=suffix) if suffix else S["log_suffix_none"])
 
         self.after(100, self._poll_queue)
 
