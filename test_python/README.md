@@ -1,8 +1,10 @@
 # hangousuihan (Python版)
 
-[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（Python実装）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・ZIP再パッケージ機能を移植しています。CLI版とGUI版を同梱しています。
+[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（Python実装）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・グレースケール化・ZIP再パッケージ機能を移植しています。CLI版とGUI版を同梱しています。
 
-本家版にあるグレースケール化・回転・反転・レベル補正・各種フィルタ機能は実装されていません。一方、本家版にない独自機能として以下があります:
+本家版にある回転・反転・レベル補正・各種フィルタ機能は実装されていません。
+
+本家版にない独自機能として以下があります:
 
 - ファイル名からSJIS（CP932）にないUnicode文字を除去
 - 書庫内書庫（ネスト書庫）をすべて再帰的に展開
@@ -47,6 +49,15 @@ python hangousuihan.py
 
 # リサイズなし（リネーム・再パックのみ）
 python hangousuihan.py 1
+
+# グレースケール化
+python hangousuihan.py --grayscale
+
+# サフィックス変更（デフォルト: _new）
+python hangousuihan.py -s ""
+
+# 非画像ファイルを出力ZIPに含めない
+python hangousuihan.py --no-copy-extra
 ```
 
 結果は `./result/` に出力されます。
@@ -63,7 +74,9 @@ python hangousuihan-gui.py
 - **リサイズ最大幅・最大高** — デフォルト 1920x1920
 - **出力画像形式** — JPEG / PNG / WEBP から選択（デフォルト JPEG）
 - **品質** — デフォルト 90（JPEG/WEBPは品質値、PNGは圧縮レベルに変換）
+- **グレースケール化** — チェックボックスで有効化
 - **リサイズなしモード** — チェックボックスでリネーム・再パックのみに切替
+- **画像以外のファイルも含める** — チェックボックスで非画像ファイルの同梱を制御（デフォルト ON）
 - **処理中断** — 中断ボタンで処理を途中停止可能
 
 ## ディレクトリ構成
@@ -75,5 +88,6 @@ test_python/
 ├── requirements.txt
 ├── target/              ← 処理対象を配置
 ├── tmp/                 ← 一時展開先（自動作成）
+├── tmp_conv/            ← 変換出力先（自動作成・処理後クリーンアップ）
 └── result/              ← 処理結果の出力先（自動作成）
 ```

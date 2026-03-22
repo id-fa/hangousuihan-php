@@ -1,8 +1,10 @@
 # hangousuihan-php
 
-[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（PHP CLI）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・ZIP再パッケージ機能を移植しています。
+[hangousuihan](https://dyama.org/hangousuihan/) の勝手移植版（PHP CLI）です。UNIX版 hangousuihan をベースに、画像アーカイブ（ZIP, 7Z, RAR, LZH）の展開・画像リサイズ・グレースケール化・ZIP再パッケージ機能を移植しています。
 
-本家版にあるグレースケール化・回転・反転・レベル補正・各種フィルタ機能は実装されていません。一方、本家版にない独自機能として以下があります:
+本家版にある回転・反転・レベル補正・各種フィルタ機能は実装されていません。
+
+本家版にない独自機能として以下があります:
 
 - ファイル名からSJIS（CP932）にないUnicode文字を除去
 - 書庫内書庫（ネスト書庫）をすべて再帰的に展開
@@ -53,6 +55,9 @@ php hangousuihan.php 1
 |------|-------------|------|
 | `RESIZE_MAX` | `1920x1920>` | リサイズ上限。ImageMagickのジオメトリ指定に準拠します。末尾の `>` は元画像がこのサイズより大きい場合のみ縮小することを意味します。例: `1280x1280>`, `3840x2160>` |
 | `JPEG_QUALITY` | `90` | JPEG出力品質（1-100）。値が大きいほど高品質・大容量になります |
+| `GRAYSCALE` | `false` | `true` にするとグレースケール化します |
+| `OUTPUT_SUFFIX` | `_new` | 出力ファイル名に付加するサフィックス。空文字で付与なし |
+| `COPY_NON_IMAGE` | `true` | 非画像ファイル（テキスト等）も出力ZIPに含めるかどうか |
 
 ---
 
@@ -60,10 +65,13 @@ php hangousuihan.php 1
 
 An unofficial PHP CLI port of [hangousuihan](https://dyama.org/hangousuihan/), based on the UNIX version. It ports the archive extraction, image resizing, filename sanitization, and ZIP repackaging functionality.
 
-Grayscale conversion, rotation, flipping, level adjustment, and various filter features from the original are not implemented. On the other hand, this port includes the following features not found in the original:
+Rotation, flipping, level adjustment, and various filter features from the original are not implemented. Grayscale conversion has been ported from the original (`GRAYSCALE` constant).
+
+The following features are unique to this port and not found in the original:
 
 - Strips Unicode characters not present in SJIS (CP932) from filenames
 - Recursively extracts nested archives (archives within archives)
+- Control whether non-image files are included in the output ZIP (`COPY_NON_IMAGE` constant)
 
 ## Requirements
 
@@ -111,3 +119,6 @@ You can change the resize behavior by editing the constants at the top of `hango
 |----------|---------|-------------|
 | `RESIZE_MAX` | `1920x1920>` | Maximum resize dimensions. Follows ImageMagick geometry syntax. The trailing `>` means images are only shrunk if they exceed this size. Examples: `1280x1280>`, `3840x2160>` |
 | `JPEG_QUALITY` | `90` | JPEG output quality (1-100). Higher values mean better quality but larger file size |
+| `GRAYSCALE` | `false` | Set to `true` to convert images to grayscale |
+| `OUTPUT_SUFFIX` | `_new` | Suffix appended to output filenames. Use empty string for no suffix |
+| `COPY_NON_IMAGE` | `true` | Whether to include non-image files (text, etc.) in the output ZIP |
