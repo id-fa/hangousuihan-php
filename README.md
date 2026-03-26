@@ -59,6 +59,10 @@ php hangousuihan.php 1
 | `OUTPUT_SUFFIX` | `_new` | 出力ファイル名に付加するサフィックス。空文字で付与なし |
 | `COPY_NON_IMAGE` | `true` | 非画像ファイル（テキスト等）も出力ZIPに含めるかどうか |
 
+## Python版
+
+Python CLI版、GUI付きPython版、およびWindows executableバイナリについては [test_python/README.md](test_python/README.md) を参照してください。
+
 ---
 
 # hangousuihan-php (English)
@@ -122,3 +126,7 @@ You can change the resize behavior by editing the constants at the top of `hango
 | `GRAYSCALE` | `false` | Set to `true` to convert images to grayscale |
 | `OUTPUT_SUFFIX` | `_new` | Suffix appended to output filenames. Use empty string for no suffix |
 | `COPY_NON_IMAGE` | `true` | Whether to include non-image files (text, etc.) in the output ZIP |
+
+## Python Version
+
+For the Python CLI version, GUI version, and Windows executable binaries, see [test_python/README.md](test_python/README.md).
