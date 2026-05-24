@@ -26,16 +26,22 @@ pip install -r requirements.txt
 
 RAR形式のアーカイブを処理する場合、別途 **UnRAR DLL** が必要です。
 
-1. [RARLab公式サイト](https://www.rarlab.com/rar_add.htm) から **UnRAR.dll** をダウンロード
-2. DLLを以下のいずれかに配置:
-   - `hangousuihan.py` と同じディレクトリ
+1. [RARLab公式サイト](https://www.rarlab.com/rar_add.htm) から **UnRAR DLL** （`UnRARDLL.exe` 等の自己展開アーカイブ）をダウンロードして展開
+2. Python のビット数に合わせた DLL を選択:
+   - **64-bit Python** → 展開先の `x64\UnRAR64.dll`
+   - **32-bit Python** → 展開先ルートの `UnRAR.dll`
+
+   ※ ビット数を間違えると `[WinError 193] %1 は有効な Win32 アプリケーションではありません` というエラーが出ます。確認は `python -c "import struct; print(struct.calcsize('P')*8)"`
+3. DLL を以下のいずれかに配置（スクリプト起動時に自動検出されます）:
+   - `hangousuihan.py` と同じディレクトリ（`test_python/UnRAR64.dll` 等）
+   - プロジェクト直下の `lib/` ディレクトリ（`lib/UnRAR64.dll` 等）
    - PATHが通ったディレクトリ（例: `C:\Windows\System32`）
-3. 環境変数を設定（任意の場所に置く場合）:
+4. 上記以外の場所に置く場合は環境変数を設定:
    ```
-   set UNRAR_LIB_PATH=C:\path\to\UnRAR.dll
+   set UNRAR_LIB_PATH=C:\path\to\UnRAR64.dll
    ```
 
-※ ZIP, 7Z, LZH のみ使用する場合、unrar.dll は不要です。
+※ ZIP, 7Z, LZH のみ使用する場合、UnRAR DLL は不要です。
 
 ## 使い方
 

@@ -1,4 +1,4 @@
 Pillow
 py7zr
-rarfile
+unrar
 lhafile

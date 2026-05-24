@@ -127,6 +127,49 @@ JPEG_QUALITY = 90
 ARCHIVE_EXTS = {".zip", ".7z", ".rar", ".lzh"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 
+
+def _setup_unrar_lib() -> None:
+    """UNRAR_LIB_PATH 未設定時、定番の配置場所から UnRAR DLL を探す
+
+    64-bit Python では UnRAR64.dll、32-bit Python では UnRAR.dll を優先する。
+    PyInstaller でフリーズされている場合は EXE と同じフォルダおよび _MEIPASS を検索。
+    """
+    if os.environ.get("UNRAR_LIB_PATH"):
+        return
+    import struct
+    is_64bit = struct.calcsize("P") * 8 == 64
+    names = ["UnRAR64.dll", "unrar64.dll", "UnRAR.dll", "unrar.dll"] if is_64bit \
+        else ["UnRAR.dll", "unrar.dll"]
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        meipass = Path(getattr(sys, "_MEIPASS", str(exe_dir)))
+        search_dirs = [
+            exe_dir,
+            exe_dir / "x64",
+            exe_dir / "lib",
+            exe_dir / "lib" / "x64",
+            meipass,
+            meipass / "x64",
+        ]
+    else:
+        script_dir = Path(__file__).resolve().parent
+        search_dirs = [
+            script_dir,
+            script_dir / "x64",
+            script_dir.parent / "lib",
+            script_dir.parent / "lib" / "x64",
+        ]
+    for d in search_dirs:
+        for n in names:
+            c = d / n
+            if c.exists():
+                os.environ["UNRAR_LIB_PATH"] = str(c)
+                return
+
+
+_setup_unrar_lib()
+
 # 出力形式設定: Pillow format名, 拡張子, save時キーワード引数
 OUTPUT_FORMATS = {
     "JPEG": {"ext": ".jpg", "save_kwargs": lambda q: {"quality": q}},
@@ -152,9 +195,9 @@ def extract_archive(path: Path, dest: Path, log) -> bool:
                 sz.extractall(path=dest)
             return True
         elif ext == ".rar":
-            import rarfile
-            with rarfile.RarFile(path, "r") as rf:
-                rf.extractall(dest)
+            from unrar import rarfile
+            rf = rarfile.RarFile(str(path))
+            rf.extractall(str(dest))
             return True
         elif ext == ".lzh":
             import lhafile
@@ -183,9 +226,9 @@ def archive_contains_root_dir(path: Path, dir_name: str) -> bool:
             with py7zr.SevenZipFile(path, mode="r") as sz:
                 return any(n.startswith(dir_name + "/") for n in sz.getnames())
         elif ext == ".rar":
-            import rarfile
-            with rarfile.RarFile(path, "r") as rf:
-                return any(n.startswith(dir_name + "/") for n in rf.namelist())
+            from unrar import rarfile
+            rf = rarfile.RarFile(str(path))
+            return any(n.startswith(dir_name + "/") for n in rf.namelist())
         elif ext == ".lzh":
             import lhafile
             lha = lhafile.Lhafile(str(path))
