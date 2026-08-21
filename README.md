@@ -63,6 +63,8 @@ php hangousuihan.php 1
 
 Python CLI版、GUI付きPython版、およびWindows executableバイナリについては [test_python/README.md](test_python/README.md) を参照してください。
 
+![Screenshot](python-gui_screenshot.webp)
+
 ---
 
 # hangousuihan-php (English)
